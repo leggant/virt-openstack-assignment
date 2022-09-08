@@ -86,25 +86,39 @@ def create_network():
     router = get_current_router()
     # get/create current gateway port/interface
     if(network is None):
-        network = conn.network.create_network(name=SYSVAR['net_name'])
+        try:
+            network = conn.network.create_network(name=SYSVAR['net_name'])
+            print('Network ', SYSVAR['net_name'], ' created')
+            print('Network ID: ', network.id, '\n')
+        except:
+            print('Error: ', SYSVAR['net_name'], ' creation failed')
     if(subnet is None):
-        subnet = conn.network.create_subnet(name=SYSVAR['subnet'], network_id=network.id, 
-            ip_version=SYSVAR['ipv'], cidr=SYSVAR['net_addr'], gateway_ip=SYSVAR['gateway']) 
+        try:
+            subnet = conn.network.create_subnet(name=SYSVAR['subnet'], 
+            network_id=network.id,ip_version=SYSVAR['ipv'], cidr=SYSVAR['net_addr'], gateway_ip=SYSVAR['gateway']) 
+            print('Subnet ', SYSVAR['subnet'], ' created')
+            print('Subnet ID: ', subnet.id, '\n')
+        except:
+            print('Error: ', SYSVAR['subnet'], ' creation failed')
     if(router is None):
-        router = conn.network.create_router(
-            name=SYSVAR['router'], external_gateway_info={"network_id": SYSVAR['border_id']})
-        router = conn.network.add_interface_to_router(router, subnet_id=subnet.id)  
+        try:
+            router = conn.network.create_router(
+                name=SYSVAR['router'], external_gateway_info={"network_id": SYSVAR['border_id']})
+            router = conn.network.add_interface_to_router(router, subnet_id=subnet.id)
+            print('Router ', SYSVAR['router'], ' created')
+            print('Router ID: ', router.id, '\n')
+        except:
+            print('Error: ', SYSVAR['subnet'], ' creation failed')
 
 def delete_network():
     network = get_current_network()
     subnet = get_current_subnet()
     router = get_current_router()
-    if(subnet is not None and network is not None):
-        ports = conn.network.ports(network_id=network.id,subnet_id=subnet.id,ip_address=SYSVAR['gateway'])
-        if(network is not None):
-            for port in ports:
-                if(port.fixed_ips[0]['ip_address'] == SYSVAR['gateway']):
-                    conn.network.remove_interface_from_router(router,subnet_id=subnet.id,port_id=port.id)
+    ports = conn.network.ports(network_id=network.id,subnet_id=subnet.id,ip_address=SYSVAR['gateway'])
+    if(ports is not None):
+        for port in ports:
+            if(port.fixed_ips[0]['ip_address'] == SYSVAR['gateway']):
+                conn.network.remove_interface_from_router(router,subnet_id=subnet.id,port_id=port.id)
     if(subnet is not None):
         conn.network.delete_subnet(subnet, ignore_missing=True)
     if(router is not None):
@@ -113,8 +127,6 @@ def delete_network():
         conn.network.delete_network(network, ignore_missing=True)
 
 def get_current_servers():
-    # for server in conn.compute.v2.server.Server.list(session=conn.compute):
-    #     print(server.to_dict())
     servers = {
         f'{USER}-web': conn.compute.find_server(f'{USER}-web', ignore_missing=True),
         f'{USER}-app': conn.compute.find_server(f'{USER}-app', ignore_missing=True),
@@ -189,8 +201,7 @@ def status():
 ### You should not modify anything below this line ###
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('operation',
-                        help='One of "create", "run", "stop", "destroy", or "status"')
+    parser.add_argument('operation', help='One of "create", "run", "stop", "destroy", or "status"')
     args = parser.parse_args()
     operation = args.operation
 
