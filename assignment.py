@@ -34,7 +34,7 @@ SYSVAR = {
   "flavour_id": conn.compute.find_flavor(FLAVOUR).id,
   "privatenet_id": conn.network.find_network(PRIVATE).id,
   "border_id": conn.network.find_network(PUBLIC).id,
-  "security_group": conn.network.find_security_group(SECURITYGROUP),
+  "security_group": conn.network.find_security_group(SECURITYGROUP).id,
   "server_names": [f'{USER}-web', f'{USER}-app',f'{USER}-db'],
   "router": f'{USER}-rtr',
   "net_name": f'{USER}-net',
@@ -64,22 +64,6 @@ def get_current_router():
     router = conn.network.find_router(SYSVAR['router'])
     return router
 
-# def attach_ip_to_vm():
-#     print('Attaching floating IP to instance:')
-#     print('------------------------------------------------------------------------\n')
-    
-#     instance = conn.compute.find_server(SERVER_NAME)
-#     floating_IP = conn.network.find_available_ip()
-#     if floating_IP:
-#         conn.compute.add_floating_ip_to_server(instance,floating_IP.floating_ip_address)
-#         print('Allocated a floating IP. To access your instance use : ssh -i {key} ubuntu@{ip}'.format(key=PRIVATE_KEYPAIR_FILE, ip=floating_IP.floating_ip_address))
-#     else:
-#         conn.network.create_ip(floating_network_id='849ab1e9-7ac5-4618-8801-xxxxxxxxxxxx')
-#         floating_IP = conn.network.find_available_ip()
-#         conn.compute.add_floating_ip_to_server(instance,floating_IP.floating_ip_address)
-#         print('Created a floating IP. To access your instance use : ssh -i {key} ubuntu@{ip}'.format(key=PRIVATE_KEYPAIR_FILE, ip=floating_IP.floating_ip_address))
-#     return floating_IP
-
 def create_network():
     network = get_current_network()
     subnet = get_current_subnet()
@@ -104,11 +88,11 @@ def create_network():
         try:
             router = conn.network.create_router(
                 name=SYSVAR['router'], external_gateway_info={"network_id": SYSVAR['border_id']})
-            router = conn.network.add_interface_to_router(router, subnet_id=subnet.id)
             print('Router ', SYSVAR['router'], ' created')
             print('Router ID: ', router.id, '\n')
         except:
-            print('Error: ', SYSVAR['subnet'], ' creation failed')
+            print('Error: ', SYSVAR['router'], ' creation failed')
+        router = conn.network.add_interface_to_router(router, subnet_id=subnet.id)
 
 def delete_network():
     network = get_current_network()
@@ -137,15 +121,20 @@ def get_current_servers():
 def create_servers():
     currnet = get_current_network()
     current_servers = get_current_servers()
-    print(currnet.id)
+    for VM, state in current_servers.items():
+        if(state is None):
+            print('Creating New Instance of ', VM)
+            newvm = conn.compute.create_server(name=VM, image_id=SYSVAR['image_id'], flavor_id=SYSVAR['flavour_id'], networks=[{'uuid': currnet.id}], 
+                key_name=SYSVAR['keypair'].name)
+        else:
+            print('VM ', VM, ' already exists')
+            continue
     #loop through the name list of servers and create the ones that are not present in the current_servers
-    for vm in current_servers:
-        if(current_servers[vm] is None):
-            ## create the VM
-            newvm = conn.compute.create_server(name=vm, image_id=SYSVAR['image_id'], 
-                flavor_id=SYSVAR['flavour_id'], networks=[{'uuid': currnet.id}], 
-                key_name=SYSVAR['keypair'].name, security_groups=SYSVAR['security_group'])
-            newvm = conn.compute.wait_for_server(newvm)
+    # for vm in current_servers:
+    #     if(current_servers[vm] is None):
+    #         ## create the VM
+    #         print()
+            # newvm = conn.compute.wait_for_server(newvm)
             # newvmip = conn.network.create_ip(floating_network_id=SYSVAR['border_id'])
             # conn.compute.add_floating_ip_to_server(newvm, newvmip.floating_ip_address)
 
@@ -153,7 +142,7 @@ def create():
     verify_create_keypair()
     create_network()
     # create port for router
-    #create_servers()
+    create_servers()
     #vm['server'] = conn.compute.create_server(name=vm['servername'], image_id=vm['image'].id, flavor_id=vm['flavour'].id, networks=[{'uuid': vm['privnet'].id}], key_name=vm['keypair'].name)
     #vm['server'] = conn.compute.wait_for_server(vm['server'])
     #vmip = conn.network.create_ip(floating_network_id=vm['publicnet'].id)
@@ -177,6 +166,7 @@ def stop():
     pass
 
 def destroy():
+    # delete servers before the network?
     net = get_current_network()
     if(net is not None):
         delete_network()
