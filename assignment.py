@@ -119,38 +119,27 @@ def get_current_servers():
     return servers
 
 def create_servers():
-    currnet = get_current_network()
+    network = get_current_network()
     current_servers = get_current_servers()
+    subnet = get_current_subnet()
+    new_servers = []
     for VM, state in current_servers.items():
         if(state is None):
             print('Creating New Instance of ', VM)
-            newvm = conn.compute.create_server(name=VM, image_id=SYSVAR['image_id'], flavor_id=SYSVAR['flavour_id'], networks=[{'uuid': currnet.id}], 
+            newvm = conn.compute.create_server(name=VM, image_id=SYSVAR['image_id'], flavor_id=SYSVAR['flavour_id'], networks=[{'uuid': network.id}], 
                 key_name=SYSVAR['keypair'].name)
+            newvm = conn.compute.wait_for_server(newvm)
+            vmip = conn.network.create_ip(floating_network_id=SYSVAR['border_id'])
+            newvmip = conn.compute.add_floating_ip_to_server(newvm, vmip.floating_ip_address)
+            new_servers.append(newvm)
         else:
             print('VM ', VM, ' already exists')
-            continue
-    #loop through the name list of servers and create the ones that are not present in the current_servers
-    # for vm in current_servers:
-    #     if(current_servers[vm] is None):
-    #         ## create the VM
-    #         print()
-            # newvm = conn.compute.wait_for_server(newvm)
-            # newvmip = conn.network.create_ip(floating_network_id=SYSVAR['border_id'])
-            # conn.compute.add_floating_ip_to_server(newvm, newvmip.floating_ip_address)
+    return new_servers
 
 def create():
     verify_create_keypair()
     create_network()
-    # create port for router
-    create_servers()
-    #vm['server'] = conn.compute.create_server(name=vm['servername'], image_id=vm['image'].id, flavor_id=vm['flavour'].id, networks=[{'uuid': vm['privnet'].id}], key_name=vm['keypair'].name)
-    #vm['server'] = conn.compute.wait_for_server(vm['server'])
-    #vmip = conn.network.create_ip(floating_network_id=vm['publicnet'].id)
-    #conn.compute.add_floating_ip_to_server(vm['server'], vmip.floating_ip_address)
-    #vm['f_ip'] = vmip.floating_ip_address
-    #vm['ipdata'] = vmip
-    #print('Server Created', vm['server'])
-    #print('IP Address: ', vm['f_ip'])
+    new_servers = create_servers()
     pass
 
 def run():
@@ -167,6 +156,12 @@ def stop():
 
 def destroy():
     # delete servers before the network?
+
+    # delete the router interface
+
+    # delete the router
+
+    # delete the network
     net = get_current_network()
     if(net is not None):
         delete_network()
