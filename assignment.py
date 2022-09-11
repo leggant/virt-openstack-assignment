@@ -34,7 +34,7 @@ SYSVAR = {
   "flavour_id": conn.compute.find_flavor(FLAVOUR).id,
   "privatenet_id": conn.network.find_network(PRIVATE).id,
   "border_id": conn.network.find_network(PUBLIC).id,
-  "security_group": conn.network.find_security_group(SECURITYGROUP).id,
+  "security_group": conn.network.find_security_group(SECURITYGROUP),
   "server_names": [f'{USER}-web', f'{USER}-app',f'{USER}-db'],
   "router": f'{USER}-rtr',
   "net_name": f'{USER}-net',
@@ -44,17 +44,17 @@ SYSVAR = {
   "ipv": '4',
 }
 
+def get_current_network():
+    network = conn.network.find_network(SYSVAR['net_name'])
+    return network
+
 def get_current_ports():
     ports = []
-    network = conn.network.find_network(SYSVAR['net_name']).id
+    network = get_current_network()
     for port in conn.network.ports():
         if(port.network_id == network):
             ports.append(port.id)
     return ports
-
-def get_current_network():
-    network = conn.network.find_network(SYSVAR['net_name'])
-    return network
 
 def get_current_subnet():
     subnet = conn.network.find_subnet(SYSVAR['subnet'])
@@ -68,7 +68,6 @@ def create_network():
     network = get_current_network()
     subnet = get_current_subnet()
     router = get_current_router()
-    # get/create current gateway port/interface
     if(network is None):
         try:
             network = conn.network.create_network(name=SYSVAR['net_name'])
@@ -87,12 +86,12 @@ def create_network():
     if(router is None):
         try:
             router = conn.network.create_router(
-                name=SYSVAR['router'], external_gateway_info={"network_id": SYSVAR['border_id']})
+                name=SYSVAR['router'],external_gateway_info={"network_id": SYSVAR['border_id']})
             print('Router ', SYSVAR['router'], ' created')
             print('Router ID: ', router.id, '\n')
         except:
             print('Error: ', SYSVAR['router'], ' creation failed')
-        router = conn.network.add_interface_to_router(router, subnet_id=subnet.id)
+        router = conn.network.add_interface_to_router(router,subnet_id=subnet.id)
 
 def delete_network():
     network = get_current_network()
@@ -129,6 +128,7 @@ def create_servers():
             newvm = conn.compute.create_server(name=VM, image_id=SYSVAR['image_id'], flavor_id=SYSVAR['flavour_id'], networks=[{'uuid': network.id}], 
                 key_name=SYSVAR['keypair'].name)
             newvm = conn.compute.wait_for_server(newvm)
+            conn.compute.add_security_group_to_server(newvm, SYSVAR['security_group'])
             vmip = conn.network.create_ip(floating_network_id=SYSVAR['border_id'])
             newvmip = conn.compute.add_floating_ip_to_server(newvm, vmip.floating_ip_address)
             new_servers.append(newvm)
@@ -155,26 +155,49 @@ def stop():
     pass
 
 def destroy():
-    # delete servers before the network?
+    current_servers = get_current_servers()
+    network = get_current_network()
+    router = get_current_router()
+    subnet = get_current_subnet()
+    ports = get_current_ports()
+    # 1. Disassociate and release the floating ip on each server
+    for server_name, server in current_servers.items():
+        if(server is not None):
+            ip = server#[NETWORK][1]["addr"]
+            print(ip)
+            # conn.compute.remove_floating_ip_from_server(web_server, web_floating_ip)
+            #     check_ip = conn.network.find_ip(web_floating_ip)
+            #     conn.network.delete_ip(check_ip)
+            #     print("Floating IP removed!")
+    # 2. Delete each server
+    # for server, state in current_servers.items():
+    #     if(state is not None):
+    #         try:
+    #             vm = conn.compute.delete_server(state)
+    #             vm = conn.compute.wait_for_server_delete(vm)
+    #             print(server, ' has been deleted.')
+    #         except:
+    #             print('An Error Occured While Deleting Server: ', server)
+    #     else:
+    #         print(server, ' Has Not Been Created/Has Been Deleted Already')
 
-    # delete the router interface
+    # 3. Delete router/Interface
+    # if(router is not None):
+    #     try:
+    #         # 3. delete the router interface
+    #         conn.network.remove_interface_from_router(router, subnet)
+    #         # 4. delete the router
+    #         conn.network.delete_router(router.id)
+    #     except:
+    #         print('An Error Occured Deleting Router: ', SYSVAR['router'])
+    # else:
+    #     print('Router, ', SYSVAR['router'], ' already delete/not created.')
 
-    # delete the router
-
-    # delete the network
-    net = get_current_network()
-    if(net is not None):
-        delete_network()
-    else:
-        print('No Network For: ', SYSVAR['net_name'])
-    #d_ip = conn.network.v2.floating_ip
-    #conn.network.delete_ip(vm['f_ip'], ignore_missing=True)
-    #xip = conn.network.get_ip(vm['publicnet'])
-    #d_ip = conn.compute.server_ips(vm['server'].id, vm['publicnet'])
-    #openstack.network.v2.floating_ip.FloatingIP(floating_network_id=f10ad6de-a26d-4c29-8c64-2a7418d47f8f
-    #vm['server'] = conn.compute.find_server(vm['servername'], ignore_missing=True)
-    #conn.compute.delete_server(vm['server'], ignore_missing=True)
-    #conn.network.delete_ip(vm['ipdata'])
+    # # 5. delete the network
+    # if(network is not None):
+    #     delete_network()
+    # else:
+    #     print('No Network For: ', SYSVAR['net_name'])
     pass
 
 def status():
