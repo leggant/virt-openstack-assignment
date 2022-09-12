@@ -22,7 +22,7 @@ be taken for each argument are
        - names: \<username\>-web, \<username\>-app, \<username\>-db
      - [x] security-group: assignment2 (You do not need to create this)
   - [x] Assign the floating IP to the web server.
-  - [ ] If any of the resources above already exist when the script is run, then they 
+  - [x] If any of the resources above already exist when the script is run, then they 
   should not be recreated.
 2. __*run*:__
    - [ ] Start the three servers created above. 

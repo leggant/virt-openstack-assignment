@@ -132,18 +132,27 @@ def delete_current_ips():
     servers = get_current_servers()
     try:
         for VM, server in servers.items():
-            xserver = conn.compute.get_server(server.id)
-            ip = xserver['addresses'][SYSVAR['net_name']][1]['addr']
-            print('Removing IP: ', ip, ' From ', VM)
-            conn.compute.remove_floating_ip_from_server(xserver, ip)
-            print('IP: ', ip, ' Removed From ', VM)
-            netip = conn.network.find_ip(ip)
-            conn.network.delete_ip(netip)
-            print('IP ', ip, ' Removed From The Network', SYSVAR['net_name'], '\n')
+            if(server is not None):
+                xserver = conn.compute.get_server(server.id)
+                ip = xserver['addresses'][SYSVAR['net_name']][1]['addr']
+                print('\nRemoving IP: ', ip, ' From ', VM)
+                try:
+                    conn.compute.remove_floating_ip_from_server(xserver, ip)
+                    print('IP: ', ip, ' Removed From ', VM)
+                except:
+                    print('Error removing IP', ip, 'from', VM)
+                    continue
+                try:
+                    netip = conn.network.find_ip(ip)
+                    conn.network.delete_ip(netip)
+                    print('IP ', ip, ' Removed From The Network', SYSVAR['net_name'], '\n')
+                except:
+                    print('Error deleting IP ', ip)
+                    continue
+            else:
+                print('No IP Address Assigned To',VM)
     except:
         print('\nAll IPs for', SYSVAR['net_name'], 'have been deleted.\n')
-        
-
 
 def create():
     verify_create_keypair()
@@ -176,11 +185,11 @@ def destroy():
         if(state is not None):
             try:
                 vm = conn.compute.delete_server(state)
-                print(server, ' has been deleted.')
+                print(server, 'has been deleted.')
             except:
                 print('An Error Occured While Deleting Server: ', server)
         else:
-            print(server, ' Has Not Been Created/Has Been Deleted Already')
+            print(server, 'Has Not Been Created Or Has Been Deleted Already')
 
     # 3. Delete router/Interface
     if(router is not None):
@@ -192,13 +201,13 @@ def destroy():
         except:
             print('An Error Occured Deleting Router: ', SYSVAR['router'])
     else:
-        print('Router, ', SYSVAR['router'], ' already delete/not created.')
+        print('\nRouter:', SYSVAR['router'], 'Has Already Been Deleted Or Has Not Been Created.')
 
     # # 5. delete the network
-    # if(network is not None):
-    #     delete_network()
-    # else:
-    #     print('No Network For: ', SYSVAR['net_name'])
+    if(network is not None):
+        delete_network()
+    else:
+        print('No Network For: ', SYSVAR['net_name'])
     pass
 
 def status():
