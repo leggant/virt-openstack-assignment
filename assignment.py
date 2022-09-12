@@ -48,14 +48,6 @@ def get_current_network():
     network = conn.network.find_network(SYSVAR['net_name'])
     return network
 
-def get_current_ports():
-    ports = []
-    network = get_current_network()
-    for port in conn.network.ports():
-        if(port.network_id == network):
-            ports.append(port.id)
-    return ports
-
 def get_current_subnet():
     subnet = conn.network.find_subnet(SYSVAR['subnet'])
     return subnet
@@ -136,6 +128,23 @@ def create_servers():
             print('VM ', VM, ' already exists')
     return new_servers
 
+def delete_current_ips():
+    servers = get_current_servers()
+    try:
+        for VM, server in servers.items():
+            xserver = conn.compute.get_server(server.id)
+            ip = xserver['addresses'][SYSVAR['net_name']][1]['addr']
+            print('Removing IP: ', ip, ' From ', VM)
+            conn.compute.remove_floating_ip_from_server(xserver, ip)
+            print('IP: ', ip, ' Removed From ', VM)
+            netip = conn.network.find_ip(ip)
+            conn.network.delete_ip(netip)
+            print('IP ', ip, ' Removed From The Network', SYSVAR['net_name'], '\n')
+    except:
+        print('\nAll IPs for', SYSVAR['net_name'], 'have been deleted.\n')
+        
+
+
 def create():
     verify_create_keypair()
     create_network()
@@ -159,39 +168,31 @@ def destroy():
     network = get_current_network()
     router = get_current_router()
     subnet = get_current_subnet()
-    ports = get_current_ports()
+
     # 1. Disassociate and release the floating ip on each server
-    for server_name, server in current_servers.items():
-        if(server is not None):
-            ip = server#[NETWORK][1]["addr"]
-            print(ip)
-            # conn.compute.remove_floating_ip_from_server(web_server, web_floating_ip)
-            #     check_ip = conn.network.find_ip(web_floating_ip)
-            #     conn.network.delete_ip(check_ip)
-            #     print("Floating IP removed!")
+    delete_current_ips()
     # 2. Delete each server
-    # for server, state in current_servers.items():
-    #     if(state is not None):
-    #         try:
-    #             vm = conn.compute.delete_server(state)
-    #             vm = conn.compute.wait_for_server_delete(vm)
-    #             print(server, ' has been deleted.')
-    #         except:
-    #             print('An Error Occured While Deleting Server: ', server)
-    #     else:
-    #         print(server, ' Has Not Been Created/Has Been Deleted Already')
+    for server, state in current_servers.items():
+        if(state is not None):
+            try:
+                vm = conn.compute.delete_server(state)
+                print(server, ' has been deleted.')
+            except:
+                print('An Error Occured While Deleting Server: ', server)
+        else:
+            print(server, ' Has Not Been Created/Has Been Deleted Already')
 
     # 3. Delete router/Interface
-    # if(router is not None):
-    #     try:
-    #         # 3. delete the router interface
-    #         conn.network.remove_interface_from_router(router, subnet)
-    #         # 4. delete the router
-    #         conn.network.delete_router(router.id)
-    #     except:
-    #         print('An Error Occured Deleting Router: ', SYSVAR['router'])
-    # else:
-    #     print('Router, ', SYSVAR['router'], ' already delete/not created.')
+    if(router is not None):
+        try:
+            # 3. delete the router interface
+            conn.network.remove_interface_from_router(router.id, subnet.id)
+            # 4. delete the router
+            conn.network.delete_router(router.id)
+        except:
+            print('An Error Occured Deleting Router: ', SYSVAR['router'])
+    else:
+        print('Router, ', SYSVAR['router'], ' already delete/not created.')
 
     # # 5. delete the network
     # if(network is not None):
