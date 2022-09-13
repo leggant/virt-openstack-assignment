@@ -1,6 +1,7 @@
 import argparse
 import openstack
 import getpass
+import VM
 openstack.enable_logging()
 conn = openstack.connect(cloud_name='openstack', region_name='nz-hlz-1')
 
@@ -89,11 +90,13 @@ def delete_network():
     network = get_current_network()
     subnet = get_current_subnet()
     router = get_current_router()
-    ports = conn.network.ports(network_id=network.id,subnet_id=subnet.id,ip_address=SYSVAR['gateway'])
-    if(ports is not None):
-        for port in ports:
-            if(port.fixed_ips[0]['ip_address'] == SYSVAR['gateway']):
-                conn.network.remove_interface_from_router(router,subnet_id=subnet.id,port_id=port.id)
+    ports = None
+    if(network is not None and subnet is not None):
+        ports = conn.network.ports(network_id=network.id,subnet_id=subnet.id,ip_address=SYSVAR['gateway'])
+        if(ports is not None):
+            for port in ports:
+                if(port.fixed_ips[0]['ip_address'] == SYSVAR['gateway']):
+                    conn.network.remove_interface_from_router(router,subnet_id=subnet.id,port_id=port.id)
     if(subnet is not None):
         conn.network.delete_subnet(subnet, ignore_missing=True)
     if(router is not None):
@@ -122,10 +125,11 @@ def create_servers():
             newvm = conn.compute.wait_for_server(newvm)
             conn.compute.add_security_group_to_server(newvm, SYSVAR['security_group'])
             vmip = conn.network.create_ip(floating_network_id=SYSVAR['border_id'])
+            print(vmip)
             newvmip = conn.compute.add_floating_ip_to_server(newvm, vmip.floating_ip_address)
             new_servers.append(newvm)
         else:
-            print('VM ', VM, ' already exists')
+            print('VM', VM, 'already exists')
     return new_servers
 
 def delete_current_ips():
@@ -154,6 +158,35 @@ def delete_current_ips():
     except:
         print('\nAll IPs for', SYSVAR['net_name'], 'have been deleted.\n')
 
+def delete_all_servers():
+    current_servers = get_current_servers()
+    for server, state in current_servers.items():
+        if(state is not None):
+            try:
+                vm = conn.compute.delete_server(state, ignore_missing=True)
+                print(server, 'has been deleted.')
+            except:
+                print('An Error Occured While Deleting Server: ', server)
+        else:
+            print(server, 'Has Not Been Created Or Has Been Deleted Already')
+
+def delete_router():
+    router = get_current_router()
+    if(router is not None):
+        try:
+            # 1. delete the router interface
+            conn.network.remove_interface_from_router(router.id, subnet.id)
+        except:
+            print('An Error Occured Deleting Interface(s) From Router: ', SYSVAR['router'])
+        try:
+            # 2. delete the router
+            conn.network.delete_router(router.id)
+        except:
+            print('An Error Occured Deleting Router: ', SYSVAR['router'])
+
+    else:
+        print('\nRouter:', SYSVAR['router'], 'Has Already Been Deleted Or Has Not Been Created.')
+
 def create():
     verify_create_keypair()
     create_network()
@@ -173,47 +206,34 @@ def stop():
     pass
 
 def destroy():
-    current_servers = get_current_servers()
-    network = get_current_network()
-    router = get_current_router()
-    subnet = get_current_subnet()
-
     # 1. Disassociate and release the floating ip on each server
     delete_current_ips()
     # 2. Delete each server
-    for server, state in current_servers.items():
-        if(state is not None):
-            try:
-                vm = conn.compute.delete_server(state)
-                print(server, 'has been deleted.')
-            except:
-                print('An Error Occured While Deleting Server: ', server)
-        else:
-            print(server, 'Has Not Been Created Or Has Been Deleted Already')
-
-    # 3. Delete router/Interface
-    if(router is not None):
-        try:
-            # 3. delete the router interface
-            conn.network.remove_interface_from_router(router.id, subnet.id)
-            # 4. delete the router
-            conn.network.delete_router(router.id)
-        except:
-            print('An Error Occured Deleting Router: ', SYSVAR['router'])
-    else:
-        print('\nRouter:', SYSVAR['router'], 'Has Already Been Deleted Or Has Not Been Created.')
-
-    # # 5. delete the network
-    if(network is not None):
-        delete_network()
-    else:
-        print('No Network For: ', SYSVAR['net_name'])
+    delete_all_servers()
+    # 3. Delete Router Interface
+    # 4. Delete Router
+    delete_router()
+    # 5. Delete the network and subnet
+    delete_network()
     pass
 
 def status():
     ''' Print a status report on the OpenStack
     virtual machines created by the create action.
     '''
+    serverOutput = []
+    allserver = get_current_servers()
+    for server_name, xserver in allserver.items():
+        res = conn.compute.get_server(xserver.id)
+        output = {
+            'Name': server_name,
+            'Status': res.status,
+            'network': res.addresses['leggtc1-net'],
+            'key': res.key_name,
+            'zone': res.location,
+            'res': res
+        }
+        print(output)
     pass
 
 ### You should not modify anything below this line ###
