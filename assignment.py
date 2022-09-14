@@ -57,6 +57,10 @@ def get_current_router():
     router = conn.network.find_router(SYSVAR['router'])
     return router
 
+def get_security_groups():
+    for port in conn.network.security_groups():
+        print(port)
+
 def create_network():
     network = get_current_network()
     subnet = get_current_subnet()
@@ -86,6 +90,14 @@ def create_network():
             print('Error: ', SYSVAR['router'], ' creation failed')
         router = conn.network.add_interface_to_router(router,subnet_id=subnet.id)
 
+def get_current_servers():
+    servers = {
+        f'{USER}-web': conn.compute.find_server(f'{USER}-web', ignore_missing=True),
+        f'{USER}-app': conn.compute.find_server(f'{USER}-app', ignore_missing=True),
+        f'{USER}-db': conn.compute.find_server(f'{USER}-db', ignore_missing=True)
+    }
+    return servers
+
 def delete_network():
     network = get_current_network()
     subnet = get_current_subnet()
@@ -104,13 +116,8 @@ def delete_network():
     if(network is not None):
         conn.network.delete_network(network, ignore_missing=True)
 
-def get_current_servers():
-    servers = {
-        f'{USER}-web': conn.compute.find_server(f'{USER}-web', ignore_missing=True),
-        f'{USER}-app': conn.compute.find_server(f'{USER}-app', ignore_missing=True),
-        f'{USER}-db': conn.compute.find_server(f'{USER}-db', ignore_missing=True)
-    }
-    return servers
+def get_server_status():
+    servers = get_current_servers()
 
 def create_servers():
     network = get_current_network()
@@ -131,6 +138,27 @@ def create_servers():
         else:
             print('VM', VM, 'already exists')
     return new_servers
+
+def get_all_ports():
+    ports = []
+    net = get_current_network()
+    for port in conn.network.ports():
+        if(port.network_id == net.id):
+            print(port)
+
+def list_current_ips():
+    servers = get_current_servers()
+    for Name, Server in servers.items():
+        if(Server is not None):
+            res = conn.compute.get_server(Server.id)
+            public_ip = res['addresses'][SYSVAR['net_name']][1]['addr']
+            public_ip_type = res['addresses'][SYSVAR['net_name']][1]['OS-EXT-IPS:type']
+            private_ip = res['addresses'][SYSVAR['net_name']][0]['addr']
+            private_ip_type = res['addresses'][SYSVAR['net_name']][0]['OS-EXT-IPS:type']
+            print(public_ip, public_ip_type)
+            print(private_ip, private_ip_type)
+            pubip = conn.network.find_ip(public_ip)
+            print(pubip)
 
 def delete_current_ips():
     servers = get_current_servers()
@@ -157,6 +185,7 @@ def delete_current_ips():
                 print('No IP Address Assigned To',VM)
     except:
         print('\nAll IPs for', SYSVAR['net_name'], 'have been deleted.\n')
+
 
 def delete_all_servers():
     current_servers = get_current_servers()
@@ -194,15 +223,18 @@ def create():
     pass
 
 def run():
-    ''' Start  a set of Openstack virtual machines
-    if they are not already running.
-    '''
+    servers = get_current_servers()
+    for server_name, server in servers.items():
+        print(server_name)
     pass
 
 def stop():
     ''' Stop  a set of Openstack virtual machines
     if they are running.
     '''
+    servers = get_current_servers()
+    for server_name, server in servers.items():
+        print(server_name)
     pass
 
 def destroy():
@@ -218,22 +250,30 @@ def destroy():
     pass
 
 def status():
-    ''' Print a status report on the OpenStack
-    virtual machines created by the create action.
-    '''
     serverOutput = []
-    allserver = get_current_servers()
-    for server_name, xserver in allserver.items():
-        res = conn.compute.get_server(xserver.id)
-        output = {
-            'Name': server_name,
-            'Status': res.status,
-            'network': res.addresses['leggtc1-net'],
-            'key': res.key_name,
-            'zone': res.location,
-            'res': res
-        }
-        print(output)
+    list_current_ips()
+    list_ports()
+    # print(subnet.gateway_ip, subnet.allocation_pools, subnet.name)
+    # print(subnet)
+    # # for server_name, xserver in allserver.items():
+    #     res = conn.compute.get_server(xserver.id)
+    #     public_ip = res['addresses'][SYSVAR['net_name']][1]['addr']
+    #     public_ip_type = res['addresses'][SYSVAR['net_name']][1]['OS-EXT-IPS:type']
+    #     private_ip = res['addresses'][SYSVAR['net_name']][0]['addr']
+    #     private_ip_type = res['addresses'][SYSVAR['net_name']][0]['OS-EXT-IPS:type']
+    #     print(public_ip, public_ip_type)
+    #     print(private_ip, private_ip_type)
+    #     output = {
+    #         'Name': server_name,
+    #         'Status': res.status,
+    #         'network': res.addresses['leggtc1-net'],
+    #         'public_ip': public_ip,
+    #         'private_ip': private_ip,
+    #         'key': res.key_name,
+    #         'zone': res.location,
+    #         'res': res
+    #     }
+        # print(output)
     pass
 
 ### You should not modify anything below this line ###
