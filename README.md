@@ -25,11 +25,11 @@ be taken for each argument are
   - [x] If any of the resources above already exist when the script is run, then they 
   should not be recreated.
 2. __*run*:__
-   - [ ] Start the three servers created above. 
+   - [x] Start the three servers created above. 
    - [ ] If any of them do not exist, print an error message. 
    - [ ] If any of the them are already running, do not restart them or otherwise change their state.
 3. __*stop*:__
-   - [ ] Stop the three servers. 
+   - [x] Stop the three servers. 
    - [ ] If any are not running, then leave them in that state. 
    - [ ] If any do not exist, display an error message.
 4. __*destroy*:__ 
