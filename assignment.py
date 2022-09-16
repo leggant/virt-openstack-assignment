@@ -116,9 +116,6 @@ def delete_network():
     if(network is not None):
         conn.network.delete_network(network, ignore_missing=True)
 
-def get_server_status():
-    servers = get_current_servers()
-
 def create_servers():
     network = get_current_network()
     current_servers = get_current_servers()
@@ -130,7 +127,8 @@ def create_servers():
             newvm = conn.compute.create_server(name=VM, image_id=SYSVAR['image_id'], flavor_id=SYSVAR['flavour_id'], networks=[{'uuid': network.id}], 
                 key_name=SYSVAR['keypair'].name)
             newvm = conn.compute.wait_for_server(newvm)
-            conn.compute.add_security_group_to_server(newvm, SYSVAR['security_group'])
+            newvm = conn.compute.add_security_group_to_server(newvm, SYSVAR['security_group'])
+            print('created', newvm)
             vmip = conn.network.create_ip(floating_network_id=SYSVAR['border_id'])
             print(vmip)
             newvmip = conn.compute.add_floating_ip_to_server(newvm, vmip.floating_ip_address)
@@ -138,27 +136,6 @@ def create_servers():
         else:
             print('VM', VM, 'already exists')
     return new_servers
-
-def get_all_ports():
-    ports = []
-    net = get_current_network()
-    for port in conn.network.ports():
-        if(port.network_id == net.id):
-            print(port)
-
-def list_current_ips():
-    servers = get_current_servers()
-    for Name, Server in servers.items():
-        if(Server is not None):
-            res = conn.compute.get_server(Server.id)
-            public_ip = res['addresses'][SYSVAR['net_name']][1]['addr']
-            public_ip_type = res['addresses'][SYSVAR['net_name']][1]['OS-EXT-IPS:type']
-            private_ip = res['addresses'][SYSVAR['net_name']][0]['addr']
-            private_ip_type = res['addresses'][SYSVAR['net_name']][0]['OS-EXT-IPS:type']
-            print(public_ip, public_ip_type)
-            print(private_ip, private_ip_type)
-            pubip = conn.network.find_ip(public_ip)
-            print(pubip)
 
 def delete_current_ips():
     servers = get_current_servers()
@@ -223,18 +200,27 @@ def create():
     pass
 
 def run():
+    print(f'Getting Server Data......\n')
     servers = get_current_servers()
     for server_name, server in servers.items():
-        print(server_name)
+        res = conn.compute.get_server(server.id)
+        if(res.status == "SHUTOFF"):
+            print(f'Starting Server: {server_name}\n')
+            conn.compute.start_server(server.id)
+        else:
+            print(f'{server_name} is already running.')
     pass
 
 def stop():
-    ''' Stop  a set of Openstack virtual machines
-    if they are running.
-    '''
+    print(f'Getting Server Data......\n')
     servers = get_current_servers()
     for server_name, server in servers.items():
-        print(server_name)
+        res = conn.compute.get_server(server.id)
+        if(res.status == "ACTIVE"):
+            print(f'Shutting Down Server: {server_name}\n')
+            stat = conn.compute.stop_server(server.id)
+        else:
+            print(f'{server_name} has already been stopped.')
     pass
 
 def destroy():
@@ -250,30 +236,49 @@ def destroy():
     pass
 
 def status():
-    serverOutput = []
-    list_current_ips()
-    list_ports()
-    # print(subnet.gateway_ip, subnet.allocation_pools, subnet.name)
-    # print(subnet)
-    # # for server_name, xserver in allserver.items():
-    #     res = conn.compute.get_server(xserver.id)
-    #     public_ip = res['addresses'][SYSVAR['net_name']][1]['addr']
-    #     public_ip_type = res['addresses'][SYSVAR['net_name']][1]['OS-EXT-IPS:type']
-    #     private_ip = res['addresses'][SYSVAR['net_name']][0]['addr']
-    #     private_ip_type = res['addresses'][SYSVAR['net_name']][0]['OS-EXT-IPS:type']
-    #     print(public_ip, public_ip_type)
-    #     print(private_ip, private_ip_type)
-    #     output = {
-    #         'Name': server_name,
-    #         'Status': res.status,
-    #         'network': res.addresses['leggtc1-net'],
-    #         'public_ip': public_ip,
-    #         'private_ip': private_ip,
-    #         'key': res.key_name,
-    #         'zone': res.location,
-    #         'res': res
-    #     }
-        # print(output)
+    intro = '\nCollecting Data for Network: {}.......'
+    print(intro.format(SYSVAR['net_name']))
+    network = get_current_network()
+    if(network is not None):
+        netname = network.name
+        netstatus = network.status
+        print(f'Network Name: \t{netname}\nNetwork Status \t{netstatus}\n')
+    else:
+        print('\t\033[1;31;40mNetwork Does Not Exist\n')
+    intro = '\n\033[1;37;40mCollecting Data for Router: {}.......'
+    print(intro.format(SYSVAR['router']))
+    router = get_current_router()
+    if(router is not None):
+        rname = router.name
+        rstatus = router.status
+        public_ip = router.external_gateway_info['external_fixed_ips'][0]['ip_address']
+        zone = router.availability_zones[0]
+        routerstat = f'Router Name \t{rname}\nRouter Status: \t{rstatus}\nPublic IP \t{public_ip}\nZone: \t{zone}\n'
+        print(routerstat)
+    else:
+        print('\t\033[1;31;40mRouter Does Not Exist\n')
+    print('\033[1;37;40mCollecting Server Data.......')
+    allserver = get_current_servers()
+    if(allserver is not None):
+        for server_name, xserver in allserver.items():
+            if(xserver is not None):
+                res = conn.compute.get_server(xserver.id)
+                groups = res.security_groups
+                group_list = ''
+                for group in groups:
+                    group_list = group_list + group['name'] + ' '
+                status = res.status
+                key = res.key_name
+                region = res.location.region_name
+                public_ip = res['addresses'][SYSVAR['net_name']][1]['addr']
+                public_ip_type = res['addresses'][SYSVAR['net_name']][1]['OS-EXT-IPS:type']
+                private_ip = res['addresses'][SYSVAR['net_name']][0]['addr']
+                private_ip_type = res['addresses'][SYSVAR['net_name']][0]['OS-EXT-IPS:type']
+                serverstat = f'Server: \t{server_name}\nStatus: \t{status}\nPublic IP: \t{public_ip}\nIP Type: \t{public_ip_type}\nPrivate IP:\t{private_ip}\nIP Type: \t{private_ip_type}\nKey Name: \t{key}\nRegion Zone: \t{region}\nSecurity Groups:\n\t\t{group_list}' 
+                print(serverstat, '\n')
+            else:
+                print(f'\t\033[1;31;40mServer {server_name} Does Not Exist')
+    print('\033[1;37;40m')
     pass
 
 ### You should not modify anything below this line ###
