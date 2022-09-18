@@ -1,8 +1,7 @@
 import argparse
 import openstack
 import getpass
-import VM
-openstack.enable_logging()
+#openstack.enable_logging()
 conn = openstack.connect(cloud_name='openstack', region_name='nz-hlz-1')
 
 IMAGE='ubuntu-minimal-22.04-x86_64'
@@ -62,35 +61,40 @@ def create_network():
     subnet = get_current_subnet()
     router = get_current_router()
     if(network is None):
+        print(f'\nCreating Network:\t{SYSVAR["net_name"]}')
         try:
             network = conn.network.create_network(name=SYSVAR['net_name'])
             print(f'Network {SYSVAR["net_name"]} created')
-            print(f'Network ID: {network.id}\n')
+            print(f'Network ID: {network.id}')
         except:
             print(f'Error: {SYSVAR["net_name"]} creation failed')
     else:
-        print(f'{SYSVAR["net_name"]}\tAlready Exists.')
+        print(f'\n{SYSVAR["net_name"]}\tAlready Exists.')
     if(subnet is None):
+        print(f'\nCreating Subnet\t{SYSVAR["subnet"]}')
         try:
             subnet = conn.network.create_subnet(name=SYSVAR['subnet'], 
             network_id=network.id,ip_version=SYSVAR['ipv'], cidr=SYSVAR['net_addr'], gateway_ip=SYSVAR['gateway']) 
-            print('Subnet ', SYSVAR['subnet'], ' created')
-            print('Subnet ID: ', subnet.id, '\n')
+            print(f'Subnet {SYSVAR["subnet"]} Created.')
+            print(f'Subnet ID: {subnet.id}')
         except:
-            print('Error: ', SYSVAR['subnet'], ' creation failed')
+            print(f'Error: {SYSVAR["subnet"]} Creation Failed')
     else:
-        print(f'{SYSVAR["subnet"]}\tAlready Exists.')
+        print(f'\n{SYSVAR["subnet"]}\tAlready Exists.')
     if(router is None):
+        print(f'\nCreating Router\t{SYSVAR["router"]}')
         try:
             router = conn.network.create_router(
                 name=SYSVAR['router'],external_gateway_info={"network_id": SYSVAR['border_id']})
-            print('Router ', SYSVAR['router'], ' created')
-            print('Router ID: ', router.id)
+            print(f'Router {SYSVAR["router"]} Created')
+            print(f'Router ID: {router.id}')
         except:
-            print('Error: ', SYSVAR['router'], ' creation failed')
+            print(f'Error: {SYSVAR["router"]} Creation Failed.')
+        print(f'\nAdding Port to Router:\t{SYSVAR["router"]}')
         router = conn.network.add_interface_to_router(router,subnet_id=subnet.id)
+        print(f'Added Port ID:\t{router["port_id"]}')
     else:
-        print(f'{SYSVAR["router"]}\tAlready Exists.')
+        print(f'\n{SYSVAR["router"]}\tAlready Exists.')
 
 def get_current_servers():
     servers = {
@@ -101,7 +105,7 @@ def get_current_servers():
     return servers
 
 def delete_network():
-    print(f'\nDeleting Network: {SYSVAR["net_name"]}')
+    print(f'\nDeleting Network: {SYSVAR["net_name"]}\n')
     network = get_current_network()
     subnet = get_current_subnet()
     router = get_current_router()
@@ -109,26 +113,28 @@ def delete_network():
     try:
         ports = conn.network.ports(network_id=network.id,subnet_id=subnet.id,ip_address=SYSVAR['gateway'])
         if(ports is not None):
-            conn.network.remove_interface_from_router(router.id, subnet.id)
             for port in ports:
                 if(port.fixed_ips[0]['ip_address'] == SYSVAR['gateway']):
                     conn.network.remove_interface_from_router(router,subnet_id=subnet.id,port_id=port.id)
+                else:
+                    conn.network.delete_port(port.id, ignore_missing=True)
     except:
-        print(f'Network: {SYSVAR["net_name"]} Does Not Exist/Has Been Deleted\n')
+        print(f'Network {SYSVAR["net_name"]}: Does Not Exist/Cannot Be Deleted\n')
     if(subnet is not None):
         res = conn.network.delete_subnet(subnet, ignore_missing=True)
-        print(f'Subnet Has Been Deleted.')
+        print(f'Subnet: {SYSVAR["subnet"]} Has Been Deleted.')
     if(router is not None):
         conn.network.delete_router(router.id, ignore_missing=True)
-        print(f'Router Has Been Deleted.')
+        print(f'Router: {SYSVAR["router"]} Has Been Deleted.')
     if(network is not None):
         conn.network.delete_network(network, ignore_missing=True)
-        print(f'Network Has Been Deleted.')
+        print(f'Network: {SYSVAR["net_name"]} Has Been Deleted.')
 
 def create_servers():
     network = get_current_network()
+    if(network is None):
+        print('\nCreating Servers........')
     current_servers = get_current_servers()
-    subnet = get_current_subnet()
     for VM, state in current_servers.items():
         if(state is None):
             print(f'\nCreating New Server Instance: {VM}')
@@ -136,9 +142,10 @@ def create_servers():
                 key_name=SYSVAR['keypair'].name)
             newvm = conn.compute.wait_for_server(newvm)
             conn.compute.add_security_group_to_server(newvm, SYSVAR['security_group'])
-            print(f'\tSuccessfully Created: {newvm.name}\n')
+            print(f'\tSuccessfully Created: {newvm.name}')
             print(f'Server ID:\t{newvm.id}')
             print(f'Status:\t\t{newvm.status}\nKey Name:\t{newvm.key_name}\nZone:\t\t{newvm.location.zone}')
+            print(f'\nGenerating New Public IP For {VM}')
             vmip = conn.network.create_ip(floating_network_id=SYSVAR['border_id'])
             conn.compute.add_floating_ip_to_server(newvm, vmip.floating_ip_address)
             vm = conn.compute.get_server(newvm.id)
@@ -148,11 +155,11 @@ def create_servers():
             for group in vm.security_groups:
                 print(f'\t{group["name"]}')
         else:
-            print(f'{VM}\tAlready Exists.')
+            print(f'\n{VM}\tAlready Exists.')
     return
 
 def delete_current_ips():
-    print('\nDeleting IPs.......')
+    print('\nDeleting IPs.......\n')
     servers = get_current_servers()
     try:
         for VM, server in servers.items():
@@ -165,7 +172,6 @@ def delete_current_ips():
                     print(f'\t\tIP: {ip} Removed From {VM}')
                 except:
                     print(f'\t\tError removing IP {ip}')
-                    continue
                 print(f'Removing IP: {ip} From {SYSVAR["net_name"]}')
                 try:
                     netip = conn.network.find_ip(ip)
@@ -173,9 +179,8 @@ def delete_current_ips():
                     print(f'\t\tIP {ip} Removed From {SYSVAR["net_name"]}')
                 except:
                     print(f'Error deleting IP {ip}')
-                    continue
             else:
-                print(f'No IP Address Assigned To {VM}')
+                print(f'No IP Address Assigned To:\t{VM}')
     except:
         print(f'\nAll IPs for {SYSVAR["net_name"]} have been deleted.\n')
 
@@ -190,18 +195,17 @@ def delete_all_servers():
             except:
                 print(f'An Error Occured While Deleting Server: {server}')
         else:
-            print(f'{server} Has Not Been Created Or Has Been Deleted Already')
+            print(f'Server Unavailable To Delete:\t{server}')
 
 def get_network_status():
     print(f'\nCollecting Data for Network: {SYSVAR["net_name"]}.......')
     network = get_current_network()
     if(network is not None):
-        netname = network.name
-        netstatus = network.status
-        created = network["created_at"]
-        updated = network["updated_at"]
-        zone = network["availability_zones"][0]
-        print(f'Network Name:\t{network.name}\nNetwork Status:\t{network.status}\nCreated:\t{network["created_at"]}\nUpdated:\t{network["updated_at"]}\nZone:\t\t{network["availability_zones"][0]}')
+        print(f'Network Name:\t{network.name}')
+        print(f'Network Status:\t{network.status}')
+        print(f'Created:\t{network["created_at"]}')
+        print(f'Updated:\t{network["updated_at"]}')
+        print(f'Zone:\t\t{network["availability_zones"][0]}')
     else:
         print(f'\t{SYSVAR["net_name"]} Does Not Exist.')
 
@@ -209,12 +213,12 @@ def get_router_status():
     print(f'\nCollecting Data for Router: {SYSVAR["router"]}.......')
     router = get_current_router()
     if(router is not None):
-        rname = router.name
-        rstatus = router.status
-        public_ip = router.external_gateway_info['external_fixed_ips'][0]['ip_address']
-        zone = router.availability_zones[0]
-        routerstat = f'Router Name\t{rname}\nRouter Status:\t{rstatus}\nPublic IP\t{public_ip}\nZone:\t\t{zone}\nCreated\t\t{router["created_at"]}\nUpdated:\t{router["updated_at"]}'
-        print(routerstat)
+        print(f'Router Name\t{router.name}')
+        print(f'outer Status:\t{router.status}')
+        print(f'Public IP\t{router.external_gateway_info["external_fixed_ips"][0]["ip_address"]}')
+        print(f'Zone:\t\t{router.availability_zones[0]}')
+        print(f'Created\t\t{router["created_at"]}')
+        print(f'Updated:\t{router["updated_at"]}')
     else:
         print(f'\t{SYSVAR["router"]} Does Not Exist')
 
@@ -222,8 +226,12 @@ def get_subnet_status():
     print(f'\nCollecting Data for Subnet: {SYSVAR["subnet"]}.......')
     subnet = get_current_subnet()
     if(subnet is not None):
-        subnetstat = f'Subnet Name \t{subnet.name}\nGateway:\t{subnet["gateway_ip"]}\nNetwork Range:\tStart:\t{subnet["allocation_pools"][0]["start"]}\n\t\tEnd:\t{subnet["allocation_pools"][0]["end"]}\nDHCP Enabled:\t{subnet["enable_dhcp"]}\nCreated\t\t{subnet["created_at"]}\nUpdated:\t{subnet["updated_at"]}'
-        print(subnetstat)
+        print(f'Subnet Name \t{subnet.name}')
+        print(f'Gateway:\t{subnet["gateway_ip"]}')
+        print(f'Network Range:\tStart:\t{subnet["allocation_pools"][0]["start"]}\n\t\tEnd:\t{subnet["allocation_pools"][0]["end"]}')
+        print(f'DHCP Enabled:\t{subnet["enable_dhcp"]}')
+        print(f'Created\t\t{subnet["created_at"]}')
+        print(f'Updated:\t{subnet["updated_at"]}')
     else:
         print(f'\t{SYSVAR["subnet"]} Does Not Exist')
 
@@ -234,20 +242,19 @@ def get_servers_status():
         for server_name, xserver in allserver.items():
             if(xserver is not None):
                 res = conn.compute.get_server(xserver.id)
-                groups = res.security_groups
-                status = res.status
-                key = res.key_name
-                region = res.location.region_name
-                public_ip = res['addresses'][SYSVAR['net_name']][1]['addr']
-                public_ip_type = res['addresses'][SYSVAR['net_name']][1]['OS-EXT-IPS:type']
-                private_ip = res['addresses'][SYSVAR['net_name']][0]['addr']
-                private_ip_type = res['addresses'][SYSVAR['net_name']][0]['OS-EXT-IPS:type']
-                serverstat = f'Server:\t{server_name}\nStatus:\t\t{status}\nPublic IP:\t{public_ip}\nIP Type:\t{public_ip_type}\nPrivate IP:\t{private_ip}\nIP Type:\t{private_ip_type}\nKey Name:\t{key}\nRegion Zone:\t{region}' 
-                print(serverstat)
+                print(f'\nServer:\t\t{server_name}')
+                print(f'Status:\t\t{res.status}')
+                print(f'Public IP:\t{res["addresses"][SYSVAR["net_name"]][1]["addr"]}')
+                print(f'IP Type:\t{res["addresses"][SYSVAR["net_name"]][1]["OS-EXT-IPS:type"]}')
+                print(f'Private IP:\t{res["addresses"][SYSVAR["net_name"]][0]["addr"]}')
+                print(f'IP Type:\t{res["addresses"][SYSVAR["net_name"]][0]["OS-EXT-IPS:type"]}')
+                print(f'Key Name:\t{res.key_name}')
+                print(f'Region Zone:\t{res.location.region_name}')
                 print('Security Group(s):')
-                for group in groups:
+                for group in res.security_groups:
                     print(f'\t\t{group["name"]}')
-                print(f'Created:\t{res["created_at"]}\nUpdated:\t{res["updated_at"]}\n')
+                print(f'Created:\t{res["created_at"]}')
+                print(f'Updated:\t{res["updated_at"]}')
             else:
                 print(f'\t{server_name} Does Not Exist')
                 
@@ -269,7 +276,7 @@ def run():
             else:
                 print(f'Server: {server_name}\tis already running.')
         else:
-            print(f'Server: {server_name}\tis not configured + cannot be started.')
+            print(f'Server Error:\n\t{server_name} is not currently unavailable/configured.')    
     pass
 
 def stop():
@@ -284,7 +291,7 @@ def stop():
             else:
                 print(f'Server: {server_name}\thas already been stopped.')
         else:
-            print(f'Server: {server_name}\tis not currently available or running.')    
+            print(f'Server Error:\n\t{server_name} is not currently unavailable/configured.')    
     pass
 
 def destroy():
