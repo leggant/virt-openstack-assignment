@@ -26,17 +26,17 @@ be taken for each argument are
   should not be recreated.
 2. __*run*:__
    - [x] Start the three servers created above. 
-   - [ ] If any of them do not exist, print an error message. 
-   - [ ] If any of the them are already running, do not restart them or otherwise change their state.
+   - [x] If any of them do not exist, print an error message. 
+   - [x] If any of the them are already running, do not restart them or otherwise change their state.
 3. __*stop*:__
    - [x] Stop the three servers. 
-   - [ ] If any are not running, then leave them in that state. 
-   - [ ] If any do not exist, display an error message.
+   - [x] If any are not running, then leave them in that state. 
+   - [x] If any do not exist, display an error message.
 4. __*destroy*:__ 
-   - [ ] Remove all of the resources created by the create action. 
-   - [ ] If any of the resources do not exist, ignore them and destroy whatever ones do.
+   - [x] Remove all of the resources created by the create action. 
+   - [x] If any of the resources do not exist, ignore them and destroy whatever ones do.
 5. __*status*:__ 
-   - [ ] Print a status report on each of the three servers indcating each servers state and their IP addresses if they have addresses assigned.
+   - [x] Print a status report on each of the three servers indcating each servers state and their IP addresses if they have addresses assigned.
 
 Your submitted assignment must use the assignment.py file. If you want to include other files in your project, place them in the same directory as assignment.py. If you use any modules not in the Python standard library, you must include a requirements.txt file. Your program will be marked using Python 3.6.8 (the version used in our lab virtualenvs).
 
